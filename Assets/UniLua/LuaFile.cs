@@ -7,6 +7,7 @@ using UnityEngine;
 namespace UniLua
 {
 	public delegate string PathHook(string filename);
+	public delegate byte[] DecryptionHook(byte[] buffer);
 	public class LuaFile
 	{
 		//private static readonly string LUA_ROOT = System.IO.Path.Combine(Application.streamingAssetsPath, "LuaRoot");
@@ -14,12 +15,22 @@ namespace UniLua
 		public static void SetPathHook(PathHook hook) {
 			pathhook = hook;
 		}
+		private static DecryptionHook decryptionhook = null;
+		public static void SetDecryptionHook(DecryptionHook hook) {
+			decryptionhook = hook;
+		}
 
 		public static FileLoadInfo OpenFile( string filename )
 		{
 			//var path = System.IO.Path.Combine(LUA_ROOT, filename);
 			var path = pathhook(filename);
-			return new FileLoadInfo( File.Open( path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ) );
+			if (decryptionhook == null) {
+				return new FileLoadInfo( File.Open( path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ) );
+			} else {
+				byte[] buf = File.ReadAllBytes(path);
+				buf = decryptionhook(buf);
+				return new FileLoadInfo(new MemoryStream(buf));
+			}
 		}
 
 		public static bool Readable( string filename )
@@ -39,7 +50,7 @@ namespace UniLua
 
 	public class FileLoadInfo : ILoadInfo, IDisposable
 	{
-		public FileLoadInfo( FileStream stream )
+		public FileLoadInfo( Stream stream )
 		{
 			Stream = stream;
       Reader = new StreamReader(Stream, System.Text.Encoding.UTF8);
@@ -75,7 +86,7 @@ namespace UniLua
 		}
 
 		private const string UTF8_BOM = "\u00EF\u00BB\u00BF";
-		private FileStream 	Stream;
+		private Stream 	Stream;
 		private StreamReader 	Reader;
 		private Queue<char>	Buf;
 
